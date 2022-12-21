@@ -5,9 +5,8 @@ from tabulate import tabulate
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
-from geometry_msgs.msg import PoseStamped, TwistStamped, WrenchStamped
+from geometry_msgs.msg import TwistStamped, WrenchStamped
 from nav_msgs.msg import Odometry
-from uuv_gazebo_ros_plugins_msgs.msg import FloatStamped
 
 from rexrov2_controller.pid_controller import PIDController
 
@@ -20,8 +19,8 @@ class AUVControl(Node):
         self.control_rate = 10.0
         self.control_period = 1.0/self.control_rate
 
-        self.sub_vel = TwistStamped()
-        self.sub_odom = Odometry()
+        self.nu_actual = np.zeros([2, 1])
+        self.nu_desired = np.zeros([2, 1])
         self.torque = WrenchStamped()
 
         self.get_logger().debug("calculating pid")
@@ -64,11 +63,11 @@ class AUVControl(Node):
         self.odom_sub = self.create_subscription(
             Odometry, "sub_odom", self.odom_callback, 10)
 
-        # TODO create publisher
+        # create publisher
         self.torque_pub = self.create_publisher(
             WrenchStamped, "cmd_forces", 10)
 
-        # TODO create timer callback
+        # create timer callback
         self.timer = self.create_timer(
             self.control_period, self.control_callback)
         self.i = 0
@@ -107,28 +106,43 @@ class AUVControl(Node):
         self.update_control_param()
         return SetParametersResult(successful=True)
 
-    # TODO create odometry subscriber callback function
-    def odom_callback(self):
-        pass
+    # create odometry subscriber callback function
+    def odom_callback(self, odom):
+        # get actual velocity
+        self.nu_actual[0, 0] = odom.twist.twist.linear.x
+        self.nu_actual[1, 0] = odom.twist.twist.angular.z
 
-    # TODO create commanded velocity subscriber callback function
-    def cmd_vel_callback(self):
-        pass
+    # create commanded velocity subscriber callback function
+
+    def cmd_vel_callback(self, vel):
+        # get desired velocity
+        self.nu_desired[0, 0] = vel.twist.linear.x
+        self.nu_desired[1, 0] = vel.twist.angular.z
 
     # TODO create control callback function
     def control_callback(self):
-        pass
+        self.get_logger().debug("calculating pid")
+        time_tupple = self.get_clock().now().seconds_nanoseconds()
+        self.time = time_tupple[0] + (time_tupple[1] * 10**-9)
 
-    # TODO create print PID values function
+        pid_u = self.pid_u.calculate_pid(
+            self.nu_desired[0, 0], self.nu_actual[0, 0], self.time)
+        pid_r = self.pid_r.calculate_pid(
+            self.nu_actual[1, 0], self.nu_actual[1, 0], self.time)
+
+        self.print_pid_debug()
+
+        # TODO transform velocity to torque
+        # torque = rigid body mass * acceleration (pid_u, pid_r)
+
+        # publish torque
+        self.torque_pub.publish(self.torque)
+
+    # create print PID values function
 
     def print_pid_debug(self):
-        # print(tabulate([['X', self.pid_u.P, self.pid_u.I, self.pid_u.D],
-        #                 ['Y', self.pid_v.P, self.pid_v.I, self.pid_v.D],
-        #                 ['Z', self.pid_w.P, self.pid_w.I, self.pid_w.D],
-        #                 ['K', self.pid_p.P, self.pid_p.I, self.pid_p.D],
-        #                 ['M', self.pid_q.P, self.pid_q.I, self.pid_q.D],
-        #                 ['N', self.pid_r.P, self.pid_r.I, self.pid_r.D]], headers=['P', 'I', 'D']))
-        pass
+        print(tabulate([['X', self.pid_u.P, self.pid_u.I, self.pid_u.D],
+                        ['N', self.pid_r.P, self.pid_r.I, self.pid_r.D]], headers=['P', 'I', 'D']))
 
 
 def main(args=None):
