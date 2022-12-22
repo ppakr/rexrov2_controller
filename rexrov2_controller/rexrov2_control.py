@@ -1,5 +1,4 @@
 import numpy as np
-import math
 from tabulate import tabulate
 
 import rclpy
@@ -13,7 +12,7 @@ from rexrov2_controller.pid_controller import PIDController
 
 class AUVControl(Node):
     def __init__(self):
-        super.__init__('rexrov_controller_node')
+        super().__init__('rexrov_controller_node')
 
         # initialize parameters
         self.control_rate = 10.0
@@ -21,7 +20,7 @@ class AUVControl(Node):
 
         self.nu_actual = np.zeros([2, 1])
         self.nu_desired = np.zeros([2, 1])
-        self.torque = WrenchStamped()
+        self.accel = WrenchStamped()
 
         self.get_logger().debug("calculating pid")
         time_tupple = self.get_clock().now().seconds_nanoseconds()
@@ -64,8 +63,8 @@ class AUVControl(Node):
             Odometry, "sub_odom", self.odom_callback, 10)
 
         # create publisher
-        self.torque_pub = self.create_publisher(
-            WrenchStamped, "cmd_forces", 10)
+        self.accel_pub = self.create_publisher(
+            WrenchStamped, "thruster_manager/input_stamped", 10)
 
         # create timer callback
         self.timer = self.create_timer(
@@ -78,6 +77,7 @@ class AUVControl(Node):
         map[key] = param.value
 
     def update_control_param(self):
+
         # Update the pid parameters
         self.k_p = np.array([self.config['k_p_u'],
                              self.config['k_p_r'],
@@ -90,7 +90,6 @@ class AUVControl(Node):
                              ])
 
         # Call reconfig_param in PIDcontroller class
-
         self.pid_u.reconfig_param(self.k_p[0], self.k_i[0], self.k_d[0])
         self.pid_r.reconfig_param(self.k_p[1], self.k_i[1], self.k_d[1])
 
@@ -113,7 +112,6 @@ class AUVControl(Node):
         self.nu_actual[1, 0] = odom.twist.twist.angular.z
 
     # create commanded velocity subscriber callback function
-
     def cmd_vel_callback(self, vel):
         # get desired velocity
         self.nu_desired[0, 0] = vel.twist.linear.x
@@ -132,11 +130,12 @@ class AUVControl(Node):
 
         self.print_pid_debug()
 
-        # TODO transform velocity to torque
-        # torque = rigid body mass * acceleration (pid_u, pid_r)
+        # construct acceleration to publish
+        self.accel.wrench.force.x = pid_u
+        self.accel.wrench.torque.z = pid_r
 
         # publish torque
-        self.torque_pub.publish(self.torque)
+        self.accel_pub.publish(self.accel)
 
     # create print PID values function
 
