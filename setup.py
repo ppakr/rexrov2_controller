@@ -20,6 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'rexrov2_control = rexrov2_controller.rexrov2_control:main',
         ],
     },
 )

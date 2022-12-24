@@ -3,7 +3,7 @@ from copy import deepcopy
 
 
 class PIDController:
-    def __init__(self, k_p: float, k_i: float, k_d: float, sat: float, type: str = 'linear'):
+    def __init__(self, k_p=0.0, k_i=0.0, k_d=0.0, type: str = 'linear'):
         """
         Initializes a PID controller with the given parameters.
 
@@ -20,7 +20,7 @@ class PIDController:
         self.k_p = k_p
         self.k_i = k_i
         self.k_d = k_d
-        self.sat = sat
+        # self.sat = sat
 
         # initialize other variables
         self.P = 0.0
